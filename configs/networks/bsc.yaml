@@ -1,0 +1,9 @@
+route: /rpc/bsc
+protocol: evm
+nodes:
+  - url: https://bsc-dataseed.binance.org
+    priority: 1
+  - url: https://bsc-mainnet.gateway.tatum.io
+    priority: 2
+    headers:
+      x-api-key: ${TATUM_API_KEY}

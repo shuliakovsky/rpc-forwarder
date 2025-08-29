@@ -1,0 +1,13 @@
+route: /rpc/wan
+protocol: evm
+nodes:
+  - url: https://gwan-ssl.wandevs.org:56891
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://wanchain-mainnet.gateway.tatum.io/
+    isPrivate: true
+    priority: 2
+    headers:
+      x-api-key: ${TATUM_API_KEY}

@@ -1,0 +1,9 @@
+route: /rpc/doge
+protocol: doge
+nodes:
+  - url: https://dogechain.info/api/v1
+    priority: 1
+  - url: https://dogecoin-mainnet.gateway.tatum.io
+    priority: 2
+    headers:
+      x-api-key: ${TATUM_API_KEY}

@@ -1,0 +1,13 @@
+route: /rpc/boba
+protocol: evm
+nodes:
+  - url: https://mainnet.boba.network
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://boba-mainnet.gateway.tatum.io/
+    isPrivate: true
+    priority: 2
+    headers:
+      x-api-key: ${TATUM_API_KEY}

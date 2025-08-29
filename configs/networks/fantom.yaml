@@ -1,0 +1,9 @@
+route: /rpc/fantom
+protocol: evm
+nodes:
+  - url: https://rpcapi.fantom.network
+    priority: 1
+  - url: https://fantom-mainnet.gateway.tatum.io
+    priority: 2
+    headers:
+      x-api-key: ${TATUM_API_KEY}

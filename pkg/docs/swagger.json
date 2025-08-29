@@ -1,0 +1,193 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "RPC Forwarder API",
+    "version": "1.0.0",
+    "description": "Proxy JSON-RPC requests to EVM, BTC and other networks with health checks, failover, gossip node discovery and admin API for runtime network management."
+  },
+  "servers": [
+    { "url": "http://localhost:8080", "description": "Local development" }
+  ],
+  "components": {
+    "schemas": {
+      "JsonRpcRequest": {
+        "type": "object",
+        "required": ["jsonrpc", "method", "id"],
+        "properties": {
+          "jsonrpc": { "type": "string", "example": "2.0" },
+          "method": { "type": "string", "example": "eth_blockNumber" },
+          "params": { "type": "array", "items": {} },
+          "id": { "type": ["string", "integer"], "example": 1 }
+        }
+      },
+      "JsonRpcResponse": {
+        "type": "object",
+        "properties": {
+          "jsonrpc": { "type": "string", "example": "2.0" },
+          "result": {},
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "integer" },
+              "message": { "type": "string" }
+            }
+          },
+          "id": { "type": ["string", "integer"] }
+        }
+      },
+      "NodeInfo": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "priority": { "type": "integer" },
+          "alive": { "type": "boolean" },
+          "ping": { "type": "integer", "description": "Latency in ms" }
+        }
+      },
+      "NetworkConfig": {
+        "type": "object",
+        "required": ["route", "protocol", "nodes"],
+        "properties": {
+          "route": { "type": "string", "example": "/rpc/matic" },
+          "protocol": { "type": "string", "enum": ["evm", "btc"] },
+          "nodes": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/NodeInfo" }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "AdminKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-admin-key",
+        "description": "Admin API key for adding networks and nodes at runtime."
+      }
+    }
+  },
+  "tags": [
+    { "name": "Public", "description": "Public API endpoints" },
+    { "name": "Proxy", "description": "JSON-RPC proxy endpoints" },
+    { "name": "Cluster", "description": "Bootstrap, gossip, leader endpoints" },
+    { "name": "Admin", "description": "Runtime network/node management" }
+  ],
+  "paths": {
+    "/networkfees": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "Get Ethereum gas fee metrics",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": { "application/json": { "example": { "baseFee": "0x12345", "maxPriorityFee": "0x1" } } }
+          }
+        }
+      }
+    },
+    "/active-nodes": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "List active nodes by network",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "type": "object", "additionalProperties": { "type": "array", "items": { "$ref": "#/components/schemas/NodeInfo" } } } } }
+          }
+        }
+      }
+    },
+    "/rpc/{network}": {
+      "post": {
+        "tags": ["Proxy"],
+        "summary": "Proxy JSON-RPC request to a given network",
+        "parameters": [
+          {
+            "name": "network",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "enum": ["eth", "btc"] }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JsonRpcRequest" } } }
+        },
+        "responses": {
+          "200": { "description": "Upstream JSON-RPC response", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JsonRpcResponse" } } } }
+        }
+      }
+    },
+    "/announce": {
+      "post": {
+        "tags": ["Cluster"],
+        "summary": "Announce this node to bootstrap server",
+        "description": "Requires a valid HMAC signature in the header.",
+        "responses": { "200": { "description": "List of known peers" } }
+      }
+    },
+    "/gossip": {
+      "post": {
+        "tags": ["Cluster"],
+        "summary": "Receive peer list via gossip",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/gossip-state": {
+      "post": {
+        "tags": ["Cluster"],
+        "summary": "Receive best-node state via gossip",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/heartbeat": {
+      "post": {
+        "tags": ["Cluster"],
+        "summary": "Record heartbeat from leader node",
+        "responses": { "200": { "description": "Heartbeat recorded" } }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "Liveness check",
+        "responses": { "200": { "description": "ok" } }
+      }
+    },
+    "/admin/networks": {
+      "post": {
+        "tags": ["Admin"],
+        "security": [{ "AdminKey": [] }],
+        "summary": "Add a new network",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NetworkConfig" } } }
+        },
+        "responses": {
+          "200": { "description": "Network added" },
+          "400": { "description": "Invalid payload or no healthy nodes" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/admin/{network}/nodes": {
+      "post": {
+        "tags": ["Admin"],
+        "security": [{ "AdminKey": [] }],
+        "summary": "Add a node to an existing network",
+        "parameters": [
+          { "name": "network", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NodeInfo" } } }
+        },
+        "responses": {
+          "200": { "description": "Node added" },
+          "400": { "description": "Invalid payload or unhealthy node" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    }
+  }
+}

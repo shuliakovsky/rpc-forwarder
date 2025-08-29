@@ -1,0 +1,12 @@
+route: /rpc/eth
+protocol: evm
+nodes:
+  - url: https://eth.llamarpc.com
+    priority: 1
+    isPrivate: false
+  - url: https://ethereum-mainnet.gateway.tatum.io/
+    priority: 2
+    isPrivate: true
+    headers:
+      content-type: application/json
+      x-api-key: ${TATUM_API_KEY}

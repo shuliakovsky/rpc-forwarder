@@ -1,0 +1,35 @@
+route: /rpc/iotx
+protocol: evm
+nodes:
+  - url: https://babel-api.mainnet.iotex.io
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://rpc.ankr.com/iotex
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://iotex-mainnet.gateway.pokt.network
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://1rpc.io/iotex
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://iotex-mainnet.gateway.tatum.io/
+    isPrivate: true
+    priority: 2
+    headers:
+      accept: application/json
+      content-type: application/json
+      x-api-key: ${TATUM_API_KEY}
+  - url: https://iotex-mainnet.g.alchemyapi.io/v2/${ALCHEMY_API_KEY}
+    isPrivate: true
+    priority: 3
+    headers:
+      Content-Type: application/json

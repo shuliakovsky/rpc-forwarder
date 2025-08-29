@@ -1,0 +1,35 @@
+route: /rpc/aurora
+protocol: evm
+nodes:
+  - url: https://mainnet.aurora.dev
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://aurora-rpc.gateway.pokt.network
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://rpc.ankr.com/aurora
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://1rpc.io/aurora
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://aurora-mainnet.gateway.tatum.io/
+    isPrivate: true
+    priority: 2
+    headers:
+      accept: application/json
+      content-type: application/json
+      x-api-key: ${TATUM_API_KEY}
+  - url: https://aurora-mainnet.g.alchemyapi.io/v2/${ALCHEMY_API_KEY}
+    isPrivate: true
+    priority: 3
+    headers:
+      Content-Type: application/json

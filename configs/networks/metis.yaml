@@ -1,0 +1,13 @@
+route: /rpc/metis
+protocol: evm
+nodes:
+  - url: https://andromeda.metis.io/?owner=1088
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://metis-mainnet.gateway.tatum.io/
+    isPrivate: true
+    priority: 2
+    headers:
+      x-api-key: ${TATUM_API_KEY}

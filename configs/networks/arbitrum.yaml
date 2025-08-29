@@ -1,0 +1,9 @@
+route: /rpc/arbitrum
+protocol: evm
+nodes:
+  - url: https://arb1.arbitrum.io/rpc
+    priority: 1
+  - url: https://arbitrum-mainnet.gateway.tatum.io
+    priority: 2
+    headers:
+      x-api-key: ${TATUM_API_KEY}

@@ -1,0 +1,9 @@
+route: /rpc/ltc
+protocol: ltc
+nodes:
+  - url: https://litecoinblockexplorer.net/api
+    priority: 1
+  - url: https://litecoin-mainnet.gateway.tatum.io
+    priority: 2
+    headers:
+      x-api-key: ${TATUM_API_KEY}

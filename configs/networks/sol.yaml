@@ -1,0 +1,9 @@
+route: /rpc/sol
+protocol: sol
+nodes:
+  - url: https://api.mainnet-beta.solana.com
+    priority: 1
+  - url: https://solana-mainnet.gateway.tatum.io
+    priority: 2
+    headers:
+      x-api-key: ${TATUM_API_KEY}

@@ -1,0 +1,9 @@
+route: /rpc/avax
+protocol: evm
+nodes:
+  - url: https://api.avax.network/ext/bc/C/rpc
+    priority: 1
+  - url: https://avalanche-mainnet.gateway.tatum.io
+    priority: 2
+    headers:
+      x-api-key: ${TATUM_API_KEY}

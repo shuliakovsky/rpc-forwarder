@@ -1,0 +1,35 @@
+route: /rpc/fuse
+protocol: evm
+nodes:
+  - url: https://rpc.fuse.io
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://fuse-rpc.gateway.pokt.network
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://rpc.ankr.com/fuse
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://1rpc.io/fuse
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://fuse-mainnet.gateway.tatum.io/
+    isPrivate: true
+    priority: 2
+    headers:
+      accept: application/json
+      content-type: application/json
+      x-api-key: ${TATUM_API_KEY}
+  - url: https://fuse-mainnet.g.alchemyapi.io/v2/${ALCHEMY_API_KEY}
+    isPrivate: true
+    priority: 3
+    headers:
+      Content-Type: application/json

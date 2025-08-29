@@ -1,0 +1,13 @@
+route: /rpc/gnosis
+protocol: evm
+nodes:
+  - url: https://rpc.gnosischain.com
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://gnosis-mainnet.gateway.tatum.io/
+    isPrivate: true
+    priority: 2
+    headers:
+      x-api-key: ${TATUM_API_KEY}

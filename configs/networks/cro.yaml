@@ -1,0 +1,13 @@
+route: /rpc/cro
+protocol: evm
+nodes:
+  - url: https://evm.cronos.org
+    isPrivate: false
+    priority: 1
+    headers:
+      Content-Type: application/json
+  - url: https://cronos-mainnet.gateway.tatum.io/
+    isPrivate: true
+    priority: 2
+    headers:
+      x-api-key: ${TATUM_API_KEY}
