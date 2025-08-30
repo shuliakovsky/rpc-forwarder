@@ -16,7 +16,7 @@ The RPC Forwarder uses several environment variables to configure its behavior. 
 | `TATUM_API_KEY`           | API key for Tatum RPC providers                                | *(required)*        |
 | `TATUM_API_KEY_TESTNET`   | Optional testnet key for Tatum (now properly redacted in logs) | *(optional)*        |
 | `ALCHEMY_API_KEY`         | API key for Alchemy RPC providers                              | *(required)*        |
-| `ALCHEMY_API_KEY_TESTNET` | Optional testnet key for Alchemy RPC providers                 | *(required)*        |
+| `ALCHEMY_API_KEY_TESTNET` | Optional testnet key for Alchemy RPC providers                 | *(optional)*        |
 
 > ️ If `ADMIN_API_KEY` is left as `changeme`, admin endpoints are unprotected.
 
