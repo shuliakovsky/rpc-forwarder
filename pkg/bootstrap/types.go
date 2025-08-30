@@ -1,6 +1,9 @@
 package bootstrap
 
-import "github.com/shuliakovsky/rpc-forwarder/pkg/peers"
+import (
+	"github.com/shuliakovsky/rpc-forwarder/pkg/peers"
+	"go.uber.org/zap"
+)
 
 type AnnounceRequest struct {
 	ID           string `json:"id"`
@@ -12,4 +15,12 @@ type AnnounceRequest struct {
 
 type AnnounceResponse struct {
 	Peers []peers.Peer `json:"peers"`
+}
+
+type Handler struct {
+	store  *peers.Store
+	myID   string
+	myAddr string
+	secret string
+	logger *zap.Logger
 }

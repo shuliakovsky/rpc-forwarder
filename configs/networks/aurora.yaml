@@ -1,5 +1,6 @@
-route: /rpc/aurora
+route: /aurora
 protocol: evm
+timeoutMs: 1500
 nodes:
   - url: https://mainnet.aurora.dev
     isPrivate: false

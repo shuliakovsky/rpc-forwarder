@@ -1,17 +1,5 @@
 package peers
 
-import "sync"
-
-type Peer struct {
-	ID   string `json:"id"`
-	Addr string `json:"addr"`
-}
-
-type Store struct {
-	mu    sync.RWMutex
-	peers map[string]Peer
-}
-
 func NewStore() *Store {
 	return &Store{
 		peers: make(map[string]Peer),
@@ -38,6 +26,26 @@ func (s *Store) List() []Peer {
 		out = append(out, p)
 	}
 	return out
+}
+func (s *Store) OnFailure(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if p, ok := s.peers[id]; ok {
+		p.Failures++
+		if p.Failures >= 2 {
+			delete(s.peers, id)
+		} else {
+			s.peers[id] = p
+		}
+	}
+}
+func (s *Store) OnSuccess(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if p, ok := s.peers[id]; ok {
+		p.Failures = 0
+		s.peers[id] = p
+	}
 }
 
 func (s *Store) Exists(id string) bool {

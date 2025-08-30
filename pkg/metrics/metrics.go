@@ -23,10 +23,19 @@ var (
 		prometheus.CounterOpts{Name: "rpcf_proxy_fail_total", Help: "Failed proxy calls"},
 		[]string{"network"},
 	)
+	WSConnected = prometheus.NewCounterVec(
+		prometheus.CounterOpts{Name: "ws_connected_total", Help: "Total WebSocket connections"},
+		[]string{"network"},
+	)
+	WSError = prometheus.NewCounterVec(
+		prometheus.CounterOpts{Name: "ws_errors_total", Help: "WebSocket errors"},
+		[]string{"network"},
+	)
 )
 
 func Init() {
 	prometheus.MustRegister(TotalNodes, HealthyNodes, ProxySuccess, ProxyFail)
+	prometheus.MustRegister(WSConnected, WSError)
 }
 
 func Handler() http.Handler {

@@ -1,5 +1,6 @@
-route: /rpc/ltc
+route: /ltc
 protocol: ltc
+timeoutMs: 1500
 nodes:
   - url: https://litecoinblockexplorer.net/api
     priority: 1

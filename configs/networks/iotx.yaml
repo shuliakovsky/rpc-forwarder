@@ -1,5 +1,6 @@
-route: /rpc/iotx
+route: /iotx
 protocol: evm
+timeoutMs: 1500
 nodes:
   - url: https://babel-api.mainnet.iotex.io
     isPrivate: false

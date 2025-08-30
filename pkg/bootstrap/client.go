@@ -47,7 +47,7 @@ func Announce(serverURL, id, name, internalAddr, secret string, logger *zap.Logg
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
-	logger.Info("Announce successfully sent", zap.String("server", serverURL))
+	logger.Info("announce sent", zap.String("server", serverURL))
 
 	return announceResp.Peers, nil
 }

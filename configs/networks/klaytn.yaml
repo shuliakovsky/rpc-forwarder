@@ -1,5 +1,6 @@
-route: /rpc/klay
+route: /klay
 protocol: evm
+timeoutMs: 1500
 nodes:
   - url: https://1rpc.io/klay
     isPrivate: false

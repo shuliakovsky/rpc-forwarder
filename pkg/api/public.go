@@ -3,6 +3,9 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/shuliakovsky/rpc-forwarder/pkg/secrets"
+	"go.uber.org/zap"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -11,12 +14,17 @@ import (
 )
 
 type Public struct {
-	Reg *registry.Registry
+	Reg    *registry.Registry
+	Logger *zap.Logger
 }
 
-func NewPublic(reg *registry.Registry) *Public { return &Public{Reg: reg} }
+func NewPublic(reg *registry.Registry, logger *zap.Logger) *Public {
+	return &Public{Reg: reg, Logger: logger}
+}
 
 func (p *Public) NetworkFees(w http.ResponseWriter, r *http.Request) {
+	start := LogRequest(p.Logger, "public_network_fees", r.Method, r.URL.Path, nil)
+
 	nodes := p.Reg.Best("eth")
 	if len(nodes) == 0 {
 		http.Error(w, "no healthy ETH nodes", http.StatusServiceUnavailable)
@@ -69,21 +77,25 @@ func (p *Public) NetworkFees(w http.ResponseWriter, r *http.Request) {
 	defer resp2.Body.Close()
 	_ = json.NewDecoder(resp2.Body).Decode(&mp)
 
-	w.Header().Set("content-type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	respBody, _ := json.Marshal(map[string]any{
 		"baseFee":        first(fh.Result.BaseFeePerGas),
 		"maxPriorityFee": mp.Result,
 	})
+	w.Header().Set("content-type", "application/json")
+	w.Write(respBody)
+	LogResponse(p.Logger, "public_network_fees", http.StatusOK, respBody, start)
 }
 
 func (p *Public) ActiveNodes(w http.ResponseWriter, r *http.Request) {
+	start := LogRequest(p.Logger, "public_active_nodes", r.Method, r.URL.Path, nil)
+
 	all := p.Reg.All()
 	resp := map[string]any{}
 	for name, st := range all {
 		var arr []map[string]any
 		for _, n := range st.Best {
 			arr = append(arr, map[string]any{
-				"url":       maskKeys(n.URL),
+				"url":       secrets.RedactString(n.URL),
 				"priority":  n.Priority,
 				"isPrivate": n.IsPrivate,
 				"alive":     n.Alive,
@@ -92,10 +104,171 @@ func (p *Public) ActiveNodes(w http.ResponseWriter, r *http.Request) {
 		}
 		resp[name] = arr
 	}
+	respBytes, _ := json.Marshal(resp)
 	w.Header().Set("content-type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	w.Write(respBytes)
+	LogResponse(p.Logger, "public_active_nodes", http.StatusOK, respBytes, start)
 }
 
+// GET /proxy/btc/fees → Tatum
+func (p *Public) BTCFees(w http.ResponseWriter, r *http.Request) {
+	start := LogRequest(p.Logger, "public_btc_fees", r.Method, r.URL.Path, nil)
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	forwardExternalAPI(w, "https://api.tatum.io/v3/blockchain/fee/BTC", "TATUM_API_KEY")
+	LogResponse(p.Logger, "public_btc_fees", http.StatusOK, nil, start)
+}
+
+// GET /proxy/eth/fee → Tatum
+func (p *Public) EthFee(w http.ResponseWriter, r *http.Request) {
+	start := LogRequest(p.Logger, "public_eth_fee", r.Method, r.URL.Path, nil)
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	forwardExternalAPI(w, "https://api.tatum.io/v3/blockchain/fee/ETH", "TATUM_API_KEY")
+	LogResponse(p.Logger, "public_eth_fee", http.StatusOK, nil, start)
+}
+
+// GET /proxy/eth/maxPriorityFee
+func (p *Public) EthMaxPriorityFee(w http.ResponseWriter, r *http.Request) {
+	start := LogRequest(p.Logger, "public_eth_max_priority_fee", r.Method, r.URL.Path, nil)
+
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	nodes := p.Reg.Best("eth")
+	if len(nodes) == 0 {
+		http.Error(w, "no healthy ETH nodes", http.StatusServiceUnavailable)
+		return
+	}
+	target := nodes[0]
+	payload := `{"jsonrpc":"2.0","id":1,"method":"eth_maxPriorityFeePerGas","params":[]}`
+	req, _ := http.NewRequest(http.MethodPost, target.URL, strings.NewReader(payload))
+	for k, v := range target.Headers {
+		req.Header.Set(k, v)
+	}
+	req.Header.Set("content-type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		http.Error(w, "rpc call failed", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	w.Write(respBody)
+	LogResponse(p.Logger, "public_eth_max_priority_fee", resp.StatusCode, respBody, start)
+}
+
+// GET /proxy/nft/get-all-nfts/{address}
+func (p *Public) NFTGetAllNFTs(w http.ResponseWriter, r *http.Request) {
+	start := LogRequest(p.Logger, "public_nft_get_all", r.Method, r.URL.Path, nil)
+
+	const prefix = "/proxy/nft/get-all-nfts/"
+	if r.Method != http.MethodGet || !strings.HasPrefix(r.URL.Path, prefix) {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	address := strings.TrimPrefix(r.URL.Path, prefix)
+	if address == "" {
+		http.Error(w, "address required", http.StatusBadRequest)
+		return
+	}
+	apiKey := os.Getenv("ALCHEMY_API_KEY")
+	url := "https://eth-mainnet.g.alchemy.com/nft/v3/" + apiKey +
+		"/getNFTsForOwner?owner=" + address + "&withMetadata=true&pageSize=100"
+	forwardExternalGET(w, url, nil)
+	LogResponse(p.Logger, "public_nft_get_all", http.StatusOK, nil, start)
+}
+
+// GET /proxy/nft/get-nft-metadata/{contract}/{tokenId}
+func (p *Public) NFTGetNFTMetadata(w http.ResponseWriter, r *http.Request) {
+	start := LogRequest(p.Logger, "public_nft_get_metadata", r.Method, r.URL.Path, nil)
+
+	const prefix = "/proxy/nft/get-nft-metadata/"
+	if r.Method != http.MethodGet || !strings.HasPrefix(r.URL.Path, prefix) {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	rest := strings.TrimPrefix(r.URL.Path, prefix)
+	parts := strings.Split(rest, "/")
+	if len(parts) < 2 {
+		http.Error(w, "contractAddress and tokenId required", http.StatusBadRequest)
+		return
+	}
+	contract, tokenId := parts[0], parts[1]
+	apiKey := os.Getenv("ALCHEMY_API_KEY")
+	url := "https://eth-mainnet.g.alchemy.com/nft/v3/" + apiKey +
+		"/getNFTMetadata?contractAddress=" + contract + "&tokenId=" + tokenId + "&refreshCache=false"
+	forwardExternalGET(w, url, nil)
+	LogResponse(p.Logger, "public_nft_get_metadata", http.StatusOK, nil, start)
+}
+
+// POST /proxy/eth/estimateGas
+func (p *Public) EthEstimateGas(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	_ = r.Body.Close()
+	start := LogRequest(p.Logger, "public_eth_estimate_gas", r.Method, r.URL.Path, body)
+
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	nodes := p.Reg.Best("eth")
+	if len(nodes) == 0 {
+		http.Error(w, "no healthy ETH nodes", http.StatusServiceUnavailable)
+		return
+	}
+
+	// create JSON-RPC request
+	payload := map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "eth_estimateGas",
+		"params":  []any{},
+	}
+	if len(body) > 0 {
+		// trying parse as params
+		var params any
+		if err := json.Unmarshal(body, &params); err == nil {
+			payload["params"] = params
+		} else {
+			// fallback — as object
+			payload["params"] = []any{json.RawMessage(body)}
+		}
+	}
+
+	b, _ := json.Marshal(payload)
+
+	// Send to the first healthy ETH node.
+	target := nodes[0]
+	req, _ := http.NewRequest(http.MethodPost, target.URL, bytes.NewReader(b))
+	for k, v := range target.Headers {
+		req.Header.Set(k, v)
+	}
+	req.Header.Set("content-type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		http.Error(w, "rpc call failed", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(respBody)
+
+	LogResponse(p.Logger, "public_eth_estimate_gas", resp.StatusCode, respBody, start)
+}
+
+// first returns the first element of the slice, or an empty string if the slice is empty.
 func first(s []string) string {
 	if len(s) == 0 {
 		return ""
@@ -103,11 +276,38 @@ func first(s []string) string {
 	return s[0]
 }
 
-func maskKeys(u string) string {
-	for _, k := range []string{os.Getenv("ALCHEMY_API_KEY"), os.Getenv("TATUM_API_KEY")} {
-		if k != "" {
-			u = strings.ReplaceAll(u, k, "[HIDDEN]")
-		}
+// forwardExternalAPI performs a GET request to an external REST API using the x-api-key from the environment variable.
+func forwardExternalAPI(w http.ResponseWriter, url, apiKeyEnv string) {
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	if k := os.Getenv(apiKeyEnv); k != "" {
+		req.Header.Set("x-api-key", k)
 	}
-	return u
+	req.Header.Set("accept", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		http.Error(w, "external api failed", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
+}
+
+// forwardExternalGET performs a GET request to an external REST API with arbitrary headers.
+func forwardExternalGET(w http.ResponseWriter, url string, headers map[string]string) {
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	req.Header.Set("accept", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		http.Error(w, "external api failed", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
 }

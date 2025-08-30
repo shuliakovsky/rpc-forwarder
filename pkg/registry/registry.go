@@ -3,35 +3,10 @@ package registry
 import (
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/shuliakovsky/rpc-forwarder/pkg/networks"
 )
-
-type NodeWithPing struct {
-	networks.Node
-	Alive bool  `json:"alive"`
-	Ping  int64 `json:"ping"` // ms
-}
-
-type DiscoveredNode struct {
-	Node      networks.Node
-	ExpiresAt time.Time
-}
-
-type NetworkState struct {
-	Protocol   string
-	Route      string
-	All        []networks.Node
-	Best       []NodeWithPing
-	Discovered []DiscoveredNode
-}
-
-type Registry struct {
-	mu    sync.RWMutex
-	State map[string]*NetworkState // key: network name (eth, btc)
-}
 
 func New() *Registry { return &Registry{State: map[string]*NetworkState{}} }
 
@@ -42,10 +17,11 @@ func (r *Registry) InitFromConfigs(cfgs map[string]networks.NetworkConfig) {
 		copyNodes := make([]networks.Node, len(c.Nodes))
 		copy(copyNodes, c.Nodes)
 		r.State[name] = &NetworkState{
-			Protocol: c.Protocol,
-			Route:    c.Route,
-			All:      copyNodes,
-			Best:     nil,
+			Protocol:  c.Protocol,
+			Route:     c.Route,
+			TimeoutMs: c.TimeoutMs,
+			All:       copyNodes,
+			Best:      nil,
 		}
 	}
 }
@@ -74,7 +50,6 @@ func (r *Registry) All() map[string]*NetworkState {
 	defer r.mu.RUnlock()
 	out := make(map[string]*NetworkState, len(r.State))
 	for k, v := range r.State {
-		// неглубокая копия ссылочного типа не нужна в ответе; используем как есть
 		out[k] = v
 	}
 	return out
@@ -104,12 +79,13 @@ func PickFastestPerPriority(nodes []NodeWithPing) []NodeWithPing {
 func (r *Registry) AddNetwork(cfg networks.NetworkConfig, best []NodeWithPing) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	key := strings.TrimPrefix(cfg.Route, "/rpc/")
+	key := strings.TrimPrefix(cfg.Route, "/")
 	r.State[key] = &NetworkState{
-		Protocol: cfg.Protocol,
-		Route:    cfg.Route,
-		All:      cfg.Nodes,
-		Best:     best,
+		Protocol:  cfg.Protocol,
+		Route:     cfg.Route,
+		TimeoutMs: cfg.TimeoutMs,
+		All:       cfg.Nodes,
+		Best:      best,
 	}
 }
 
@@ -154,7 +130,7 @@ func (r *Registry) PruneAndMerge(ttl time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, st := range r.State {
-		// чистим устаревшие
+		//  Cleaning up outdated nodes
 		var fresh []DiscoveredNode
 		for _, dn := range st.Discovered {
 			if dn.ExpiresAt.After(now) {
@@ -163,9 +139,9 @@ func (r *Registry) PruneAndMerge(ttl time.Duration) {
 		}
 		st.Discovered = fresh
 
-		// мержим с All
+		// Merge with All
 		for _, dn := range st.Discovered {
-			// без дубликатов
+			// no duplicates
 			dup := false
 			for _, n := range st.All {
 				if n.URL == dn.Node.URL {
@@ -178,4 +154,18 @@ func (r *Registry) PruneAndMerge(ttl time.Duration) {
 			}
 		}
 	}
+}
+func (r *Registry) Exists(route string) bool {
+	route = strings.ToLower(strings.Trim(route, "/"))
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, ok := r.State[route]
+	return ok
+}
+
+func (r *Registry) TimeoutMs(network string) int {
+	if s, ok := r.State[network]; ok {
+		return s.TimeoutMs
+	}
+	return 0
 }

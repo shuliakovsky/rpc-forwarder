@@ -1,5 +1,6 @@
-route: /rpc/arbitrum
+route: /arbitrum
 protocol: evm
+timeoutMs: 1500
 nodes:
   - url: https://arb1.arbitrum.io/rpc
     priority: 1

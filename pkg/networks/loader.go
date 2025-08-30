@@ -2,6 +2,7 @@ package networks
 
 import (
 	"fmt"
+	"go.uber.org/zap"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,12 +11,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func LoadAll(dir string) (map[string]NetworkConfig, error) {
+func LoadAll(dir string, logger *zap.Logger) (map[string]NetworkConfig, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
-	re := regexp.MustCompile(`\$\{([A-Z0-9_]+)\}`)
+	re := regexp.MustCompile(`\$\{([A-Z0-9_]+)\}`) // Searching for environment variables to substitute.
 	out := map[string]NetworkConfig{}
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
@@ -26,9 +27,21 @@ func LoadAll(dir string) (map[string]NetworkConfig, error) {
 			return nil, err
 		}
 		b = re.ReplaceAllFunc(b, func(m []byte) []byte {
-			k := re.FindSubmatch(m)[1]
-			return []byte(os.Getenv(string(k)))
+			k := string(re.FindSubmatch(m)[1])
+			val := os.Getenv(k)
+			if val == "" {
+				logger.Warn("env variable is empty during config expansion",
+					zap.String("file", e.Name()),
+					zap.String("var", k))
+			}
+			return []byte(val)
 		})
+
+		// If any ${VAR} remains -> misconfiguration
+		if re.Match(b) {
+			logger.Error("unresolved ${VAR} placeholders left after env expansion",
+				zap.String("file", e.Name()))
+		}
 		var nc NetworkConfig
 		if err := yaml.Unmarshal(b, &nc); err != nil {
 			return nil, fmt.Errorf("%s: %w", e.Name(), err)

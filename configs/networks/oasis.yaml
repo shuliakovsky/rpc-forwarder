@@ -1,5 +1,6 @@
-route: /rpc/oasis
+route: /oasis
 protocol: evm
+timeoutMs: 1500
 nodes:
   - url: https://emerald.oasis.dev
     isPrivate: false

@@ -74,9 +74,9 @@ func HeartbeatLoop(store *peers.Store, selfID string, ttl time.Duration, logger 
 			}
 			RecordHeartbeat(selfID, msg.Timestamp)
 		} else {
-			// Фолловеры проверяют, жив ли лидер
+			// is leader alive?
 			if !IsLeaderAlive(leaderID, ttl) {
-				logger.Warn("Leader is ded, voting for new leader", zap.String("oldLeader", leaderID))
+				logger.Warn("leader heartbeat missed; triggering re-election", zap.String("old_leader", leaderID))
 			}
 		}
 		time.Sleep(ttl / 2)

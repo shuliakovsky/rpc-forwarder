@@ -11,11 +11,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type GossipMessage struct {
-	From  string       `json:"from"`
-	Peers []peers.Peer `json:"peers"`
-}
-
 func Start(store *peers.Store, selfID string, logger *zap.Logger) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -26,7 +21,7 @@ func Start(store *peers.Store, selfID string, logger *zap.Logger) {
 			continue
 		}
 
-		// Выбираем случайного пира, кроме себя
+		// Pick a random peer (excluding self)
 		target := plist[rand.Intn(len(plist))]
 		if target.ID == selfID {
 			continue
@@ -37,17 +32,20 @@ func Start(store *peers.Store, selfID string, logger *zap.Logger) {
 
 		url := "http://" + target.Addr + "/gossip"
 		resp, err := http.Post(url, "application/json", bytes.NewBuffer(data))
+
 		if err != nil {
-			logger.Warn("Ошибка gossip отправки", zap.String("target", target.ID), zap.Error(err))
+			store.OnFailure(target.ID)
+			logger.Warn("gossip send failed", zap.String("target", target.ID), zap.Error(err))
 			continue
 		}
+		store.OnSuccess(target.ID)
 		resp.Body.Close()
 
-		logger.Debug("Gossip отправлен", zap.String("to", target.ID), zap.Int("peers_count", len(plist)))
+		logger.Debug("Gossip sent", zap.String("to", target.ID), zap.Int("peers_count", len(plist)))
 	}
 }
 
-// Обработчик входящих gossip-сообщений
+// Inbound gossip handler
 func Handler(store *peers.Store, logger *zap.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -60,12 +58,12 @@ func Handler(store *peers.Store, logger *zap.Logger) http.HandlerFunc {
 			return
 		}
 
-		// Мержим список
+		// Merge peer list
 		for _, p := range msg.Peers {
 			store.Add(p)
 		}
 
-		logger.Debug("Gossip получен", zap.String("from", msg.From), zap.Int("count", len(msg.Peers)))
+		logger.Debug("Gossip received", zap.String("from", msg.From), zap.Int("count", len(msg.Peers)))
 		w.WriteHeader(http.StatusOK)
 	}
 }

@@ -1,5 +1,6 @@
-route: /rpc/boba
+route: /boba
 protocol: evm
+timeoutMs: 1500
 nodes:
   - url: https://mainnet.boba.network
     isPrivate: false

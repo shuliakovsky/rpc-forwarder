@@ -1,5 +1,6 @@
-route: /rpc/metis
+route: /metis
 protocol: evm
+timeoutMs: 1500
 nodes:
   - url: https://andromeda.metis.io/?owner=1088
     isPrivate: false

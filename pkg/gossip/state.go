@@ -12,26 +12,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type NodeAdvert struct {
-	URL      string `json:"url"`
-	Priority int    `json:"priority"`
-	Protocol string `json:"protocol"`
-	Alive    bool   `json:"alive"`
-	Ping     int64  `json:"ping"`
-}
-
-type NetworkAdvert struct {
-	Name     string       `json:"name"`
-	Protocol string       `json:"protocol"`
-	Nodes    []NodeAdvert `json:"nodes"`
-	Ts       int64        `json:"ts"`
-}
-
-type StateMessage struct {
-	From     string          `json:"from"`
-	Networks []NetworkAdvert `json:"networks"`
-}
-
 func Publisher(reg *registry.Registry, peersStore *peers.Store, selfID string, logger *zap.Logger) {
 	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()
@@ -59,7 +39,7 @@ func buildAdvert(selfID string, reg *registry.Registry) StateMessage {
 		var nodes []NodeAdvert
 		for _, n := range st.Best {
 			nodes = append(nodes, NodeAdvert{
-				URL:      n.URL, // секретные заголовки не рассылаем
+				URL:      n.URL, // do not distribute sensitive headers
 				Priority: n.Priority,
 				Protocol: st.Protocol,
 				Alive:    n.Alive,
@@ -87,7 +67,7 @@ func StateHandler(reg *registry.Registry, logger *zap.Logger) http.HandlerFunc {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		// мягкое слияние: добавляем новые URL в All, проверять будет health‑цикл
+		// Soft-merge: add new URLs into All; health loop will validate them
 		all := reg.All()
 		for _, adv := range msg.Networks {
 			if st, ok := all[adv.Name]; ok {

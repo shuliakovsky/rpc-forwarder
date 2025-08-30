@@ -1,5 +1,6 @@
-route: /rpc/btc
+route: /btc
 protocol: btc
+timeoutMs: 2500
 nodes:
   - url: https://blockstream.info/api
     priority: 1
@@ -7,7 +8,7 @@ nodes:
     priority: 2
     headers:
       x-api-key: ${TATUM_API_KEY}
-# при наличии onion-ноды:
+# +# if an onion node is available:
 #  - url: http://btcnodeexample.onion
 #    priority: 1
 #    tor: true

@@ -10,7 +10,7 @@ import (
 func TestAddAndGetNetwork(t *testing.T) {
 	r := New()
 	cfg := networks.NetworkConfig{
-		Route:    "/rpc/testnet",
+		Route:    "/testnet",
 		Protocol: "evm",
 		Nodes:    []networks.Node{{URL: "http://example.com", Priority: 1}},
 	}

@@ -1,5 +1,6 @@
-route: /rpc/sol
+route: /sol
 protocol: sol
+timeoutMs: 800
 nodes:
   - url: https://api.mainnet-beta.solana.com
     priority: 1

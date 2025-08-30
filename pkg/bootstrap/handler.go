@@ -12,14 +12,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type Handler struct {
-	store  *peers.Store
-	myID   string
-	myAddr string
-	secret string
-	logger *zap.Logger
-}
-
 func NewHandler(store *peers.Store, myID, myAddr, secret string, logger *zap.Logger) *Handler {
 	return &Handler{
 		store:  store,

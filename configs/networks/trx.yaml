@@ -1,5 +1,6 @@
-route: /rpc/trx
+route: /trx
 protocol: trx
+timeoutMs: 1500
 nodes:
   - url: https://api.trongrid.io
     priority: 1
