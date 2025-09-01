@@ -1,0 +1,88 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rpc-forwarder
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rpc-forwarder
+  template:
+    metadata:
+      labels:
+        app: rpc-forwarder
+    spec:
+      containers:
+        - name: rpc-forwarder
+          image: shuliakovsky/rpc-forwarder:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ALCHEMY_API_KEY
+              value: changeme
+            - name: TATUM_API_KEY
+              value: changeme
+            - name: ADMIN_API_KEY
+              value: changeme
+            - name: SERVER_PORT
+              value: "8080"
+            - name: BOOTSTRAP_URL
+              value: https://rpc-forwarder.example.com
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rpc-forwarder
+spec:
+  selector:
+    app: rpc-forwarder
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rpc-forwarder
+spec:
+  rules:
+    - host: rpc-forwarder.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rpc-forwarder
+                port:
+                  number: 80
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rpc-forwarder
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: rpc-forwarder
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
