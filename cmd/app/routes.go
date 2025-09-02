@@ -20,6 +20,7 @@ import (
 	"github.com/shuliakovsky/rpc-forwarder/pkg/metrics"
 	"github.com/shuliakovsky/rpc-forwarder/pkg/peers"
 	"github.com/shuliakovsky/rpc-forwarder/pkg/registry"
+	"github.com/shuliakovsky/rpc-forwarder/pkg/secrets"
 )
 
 func registerRoutes(
@@ -58,37 +59,42 @@ func registerRoutes(
 	// Public routes
 	http.HandleFunc("/networkfees", public.NetworkFees)
 	http.HandleFunc("/active-nodes", func(w http.ResponseWriter, r *http.Request) {
-		res := make(map[string]struct {
-			Route    string                  `json:"route"`
-			Protocol string                  `json:"protocol"`
-			Timeout  int                     `json:"timeoutMs"`
-			Nodes    []registry.NodeWithPing `json:"nodes"`
-		})
+		if r.Method != http.MethodPost {
+			return
+		}
+		type liteNode struct {
+			URL       string `json:"url"`
+			Priority  int    `json:"priority"`
+			IsPrivate bool   `json:"isPrivate"`
+		}
+		out := make(map[string][]liteNode)
 		for name, st := range reg.All() {
-			nodes := st.Best
-			if len(nodes) == 0 {
-				nodes = []registry.NodeWithPing{}
+			if len(st.Best) == 0 {
+				out[name] = []liteNode{}
+				continue
 			}
-			res[name] = struct {
-				Route    string                  `json:"route"`
-				Protocol string                  `json:"protocol"`
-				Timeout  int                     `json:"timeoutMs"`
-				Nodes    []registry.NodeWithPing `json:"nodes"`
-			}{
-				Route:    st.Route,
-				Protocol: st.Protocol,
-				Timeout:  st.TimeoutMs,
-				Nodes:    registry.SanitizeNodes(nodes),
+			arr := make([]liteNode, 0, len(st.Best))
+			for _, n := range st.Best {
+				// Маскируем ключи из env (x-api-key и т.п.)
+				masked := n.URL
+				masked = secrets.RedactString(masked)
+				arr = append(arr, liteNode{
+					URL:       masked,
+					Priority:  n.Priority,
+					IsPrivate: n.IsPrivate,
+				})
 			}
+			out[name] = arr
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(res)
+		_ = json.NewEncoder(w).Encode(out)
 	})
 
 	// Fee helpers
 	http.HandleFunc("/proxy/btc/fees", public.BTCFees)
 	http.HandleFunc("/proxy/eth/fee", public.EthFee)
 	http.HandleFunc("/proxy/eth/maxPriorityFee", public.EthMaxPriorityFee)
+	http.HandleFunc("/proxy/btc/balance/", public.BTCBalance)
 
 	// NFT helpers
 	http.HandleFunc("/proxy/nft/get-all-nfts/", public.NFTGetAllNFTs)

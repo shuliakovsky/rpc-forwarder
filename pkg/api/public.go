@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/shuliakovsky/rpc-forwarder/pkg/secrets"
 	"go.uber.org/zap"
 	"io"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/shuliakovsky/rpc-forwarder/pkg/registry"
+	"github.com/shuliakovsky/rpc-forwarder/pkg/secrets"
 )
 
 type Public struct {
@@ -88,6 +88,34 @@ func (p *Public) NetworkFees(w http.ResponseWriter, r *http.Request) {
 
 func (p *Public) ActiveNodes(w http.ResponseWriter, r *http.Request) {
 	start := LogRequest(p.Logger, "public_active_nodes", r.Method, r.URL.Path, nil)
+	if r.Method == http.MethodPost {
+		type liteNode struct {
+			URL       string `json:"url"`
+			Priority  int    `json:"priority"`
+			IsPrivate bool   `json:"isPrivate"`
+		}
+		out := make(map[string][]liteNode)
+		for name, st := range p.Reg.All() {
+			if len(st.Best) == 0 {
+				out[name] = []liteNode{}
+				continue
+			}
+			arr := make([]liteNode, 0, len(st.Best))
+			for _, n := range st.Best {
+				arr = append(arr, liteNode{
+					URL:       secrets.RedactString(n.URL),
+					Priority:  n.Priority,
+					IsPrivate: n.IsPrivate,
+				})
+			}
+			out[name] = arr
+		}
+		b, _ := json.Marshal(out)
+		w.Header().Set("content-type", "application/json")
+		w.Write(b)
+		LogResponse(p.Logger, "public_active_nodes", http.StatusOK, b, start)
+		return
+	}
 
 	all := p.Reg.All()
 	resp := map[string]any{}
@@ -246,13 +274,12 @@ func (p *Public) EthEstimateGas(w http.ResponseWriter, r *http.Request) {
 	b, _ := json.Marshal(payload)
 
 	// Send to the first healthy ETH node.
-	target := nodes[0]
-	req, _ := http.NewRequest(http.MethodPost, target.URL, bytes.NewReader(b))
-	for k, v := range target.Headers {
-		req.Header.Set(k, v)
-	}
+	tatumURL := "https://api.tatum.io/v3/blockchain/node/ethereum-mainnet"
+	req, _ := http.NewRequest(http.MethodPost, tatumURL, bytes.NewReader(b))
 	req.Header.Set("content-type", "application/json")
-
+	if k := os.Getenv("TATUM_API_KEY"); k != "" {
+		req.Header.Set("x-api-key", k)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		http.Error(w, "rpc call failed", http.StatusBadGateway)
@@ -310,4 +337,26 @@ func forwardExternalGET(w http.ResponseWriter, url string, headers map[string]st
 	w.Header().Set("content-type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
+}
+
+// GET /proxy/btc/balance/{address} → Tatum
+func (p *Public) BTCBalance(w http.ResponseWriter, r *http.Request) {
+	start := LogRequest(p.Logger, "public_btc_balance", r.Method, r.URL.Path, nil)
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	const prefix = "/proxy/btc/balance/"
+	if !strings.HasPrefix(r.URL.Path, prefix) {
+		http.NotFound(w, r)
+		return
+	}
+	addr := strings.TrimPrefix(r.URL.Path, prefix)
+	if addr == "" {
+		http.Error(w, "address required", http.StatusBadRequest)
+		return
+	}
+	url := "https://api.tatum.io/v3/bitcoin/address/balance/" + addr
+	forwardExternalAPI(w, url, "TATUM_API_KEY")
+	LogResponse(p.Logger, "public_btc_balance", http.StatusOK, nil, start)
 }

@@ -39,7 +39,7 @@ func (p *Proxy) Serve(w http.ResponseWriter, r *http.Request) {
 	}
 	network := parts[0]
 	var tail string
-	if len(parts) > 2 {
+	if len(parts) > 1 {
 		tail = strings.Join(parts[1:], "/")
 	}
 

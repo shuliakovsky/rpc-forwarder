@@ -30,7 +30,9 @@ func adaptTRX(tail, method string, _ http.Header, body []byte, logger *zap.Logge
 	}
 
 	// 2) default path TronGrid/wallet — as is
-	if strings.HasPrefix(ltail, "wallet/") || strings.HasPrefix(ltail, "v1/") {
+	if strings.HasPrefix(ltail, "wallet/") ||
+		strings.HasPrefix(ltail, "walletsolidity/") ||
+		strings.HasPrefix(ltail, "v1/") {
 		return Result{
 			Tail:              tail,
 			Method:            method,
@@ -40,13 +42,11 @@ func adaptTRX(tail, method string, _ http.Header, body []byte, logger *zap.Logge
 		}
 	}
 
-	// 3) Default: last block
-	logger.Debug("trx_adapter_nowblock_default", zap.String("tail", tail))
+	// 3) Default: universal proxy
 	return Result{
-		Tail:              "wallet/getnowblock",
-		Method:            http.MethodPost,
-		Body:              mustJSON(map[string]any{}),
-		Headers:           ensureJSON(nil),
-		AllowedHostSubstr: nil,
+		Tail:    tail,
+		Method:  method,
+		Body:    clone(body),
+		Headers: ensureJSON(nil),
 	}
 }
