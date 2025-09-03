@@ -77,13 +77,6 @@ func isHexAddress(s string) bool {
 	return err == nil
 }
 
-func normalizeHex(s string) string {
-	if strings.HasPrefix(s, "0x") {
-		return s
-	}
-	return "0x" + s
-}
-
 // ownerOf(uint256) → 0x6352211e + tokenId 32-byte left-padded
 func buildOwnerOfData(tokenId string) string {
 	selector := "0x6352211e"
@@ -121,4 +114,10 @@ func filterEmpty(in []string) []string {
 		}
 	}
 	return out
+}
+func normalizeHex(s string) string {
+	if strings.HasPrefix(s, "0x") {
+		return s
+	}
+	return "0x" + s
 }

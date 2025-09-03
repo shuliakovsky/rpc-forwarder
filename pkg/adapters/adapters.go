@@ -18,7 +18,7 @@ type Result struct {
 	AllowedHostSubstr []string          // If specified, the proxy forwards requests only to upstreams whose URLs contain at least one of the defined substrings.
 }
 
-func Adapt(network, tail, method string, hdr http.Header, body []byte, logger *zap.Logger) Result {
+func Adapt(network, protocol, tail, method string, hdr http.Header, body []byte, logger *zap.Logger) Result {
 	switch strings.ToLower(network) {
 	case "trx":
 		return adaptTRX(tail, method, hdr, body, logger)
@@ -32,6 +32,9 @@ func Adapt(network, tail, method string, hdr http.Header, body []byte, logger *z
 		return adaptDOGE(tail, method, hdr, body, logger)
 	default:
 		// default behaviour
+		if strings.EqualFold(protocol, "evm") {
+			return adaptEVM(tail, method, hdr, body, logger)
+		}
 		return Result{
 			Tail:    tail,
 			Method:  method,

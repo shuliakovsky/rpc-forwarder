@@ -21,7 +21,7 @@ func adaptBTC(tail, method string, _ http.Header, body []byte, logger *zap.Logge
 			Method:            http.MethodGet,
 			Body:              nil,
 			Headers:           map[string]string{},
-			AllowedHostSubstr: nil,
+			AllowedHostSubstr: []string{"blockstream.info"}, // ограничиваем на надёжного провайдера
 		}
 	}
 	if strings.HasPrefix(ltail, "rest/") ||

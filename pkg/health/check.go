@@ -296,6 +296,20 @@ func (c *Checker) UpdateNetwork(protocol string, nodes []networks.Node) []regist
 		default:
 			alive, ping = false, 0
 		}
+		if !alive {
+			c.Logger.Warn("health_node_unhealthy",
+				zap.String("url", n.URL),
+				zap.String("protocol", protocol),
+				zap.Int("priority", n.Priority),
+			)
+		} else {
+			c.Logger.Debug("health_node_alive",
+				zap.String("url", n.URL),
+				zap.String("protocol", protocol),
+				zap.Int("priority", n.Priority),
+				zap.Int64("ping_ms", ping),
+			)
+		}
 		res = append(res, registry.NodeWithPing{Node: n, Alive: alive, Ping: ping})
 	}
 	return registry.PickFastestPerPriority(res)

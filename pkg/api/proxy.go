@@ -31,7 +31,7 @@ func NewProxy(reg *registry.Registry, logger *zap.Logger) *Proxy {
 
 // Handle /{network}[/*tail]
 func (p *Proxy) Serve(w http.ResponseWriter, r *http.Request) {
-	// parse path: /{network}/optional/tail...
+	// Разбор пути: /{network}/optional/tail...
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
 	if len(parts) < 1 {
 		http.NotFound(w, r)
@@ -43,58 +43,61 @@ func (p *Proxy) Serve(w http.ResponseWriter, r *http.Request) {
 		tail = strings.Join(parts[1:], "/")
 	}
 
+	// Получение лучших узлов
 	candidates := p.Reg.Best(network)
 	if len(candidates) == 0 {
-		p.Logger.Error("no_available_nodes", zap.String("network", network))
+		p.Logger.Error("proxy_no_available_nodes", zap.String("network", network))
 		http.Error(w, "no available nodes", http.StatusServiceUnavailable)
 		return
 	}
 
-	// read original body once
+	// Чтение тела запроса
 	origBody, _ := io.ReadAll(r.Body)
 	_ = r.Body.Close()
 
 	start := LogRequest(p.Logger, "proxy", r.Method, r.URL.Path, origBody)
 
-	// adapt request per network
-	ad := adapters.Adapt(network, tail, r.Method, r.Header, origBody, p.Logger)
+	// 🔧 Адаптация запроса
+	protocol := p.Reg.ProtocolOf(network)
+	ad := adapters.Adapt(network, protocol, tail, r.Method, r.Header, origBody, p.Logger)
 
-	// Ограничение по провайдерам
+	// Уважение метода: если адаптер переписал GET → POST с телом, убираем query
+	rawQuery := r.URL.RawQuery
+	if r.Method == http.MethodGet && ad.Method == http.MethodPost && len(ad.Body) > 0 {
+		p.Logger.Debug("proxy_adapter_rewrote_get_to_post", zap.String("network", network), zap.String("tail", tail))
+		rawQuery = ""
+	}
+
+	// Фильтрация по доменам, если адаптер требует
 	if len(ad.AllowedHostSubstr) > 0 {
 		filtered := make([]registry.NodeWithPing, 0, len(candidates))
 		for _, n := range candidates {
-			ok := false
 			for _, sub := range ad.AllowedHostSubstr {
 				if strings.Contains(strings.ToLower(n.URL), strings.ToLower(sub)) {
-					ok = true
+					filtered = append(filtered, n)
 					break
 				}
-			}
-			if ok {
-				filtered = append(filtered, n)
 			}
 		}
 		candidates = filtered
 		if len(candidates) == 0 {
-			p.Logger.Warn("no_upstreams_match_adapter_filter", zap.String("network", network))
+			p.Logger.Warn("proxy_no_upstreams_match_filter", zap.String("network", network))
 			http.Error(w, "no allowed upstreams", http.StatusServiceUnavailable)
 			return
 		}
 	}
 
-	// common headers snapshot
+	// Подготовка заголовков
 	inHeaders := r.Header.Clone()
-	// enforce adapter headers
 	for k, v := range ad.Headers {
 		inHeaders.Set(k, v)
 	}
 
-	rawQuery := r.URL.RawQuery
-
+	// Попытки отправки запроса на upstream
 	for i, node := range candidates {
 		upstreamURL := buildUpstreamURL(node.URL, ad.Tail, rawQuery)
 
-		// таймаут из конфига или дефолт
+		// ⏱ Таймаут на узел
 		perNodeTimeout := time.Duration(p.Reg.TimeoutMs(network)) * time.Millisecond
 		if perNodeTimeout <= 0 {
 			perNodeTimeout = defaultTimeoutFor(network)
@@ -111,10 +114,11 @@ func (p *Proxy) Serve(w http.ResponseWriter, r *http.Request) {
 			req.Header.Set("content-type", "application/json")
 		}
 
+		// Отправка запроса
 		resp, err := p.Client.Do(req)
 		if err != nil {
 			cancel()
-			p.Logger.Warn("upstream_timeout_or_err",
+			p.Logger.Warn("proxy_upstream_error",
 				zap.String("network", network),
 				zap.String("upstream", upstreamURL),
 				zap.Int("attempt", i+1),
@@ -129,11 +133,11 @@ func (p *Proxy) Serve(w http.ResponseWriter, r *http.Request) {
 		cancel()
 
 		lat := time.Since(start).Milliseconds()
-
 		LogResponse(p.Logger, "proxy", resp.StatusCode, respBody, start)
 
+		// Проверка на рейт-лимит или 5xx
 		if isRateLimited(resp, respBody) || resp.StatusCode >= 500 {
-			p.Logger.Warn("upstream_rate_or_5xx",
+			p.Logger.Warn("proxy_upstream_rate_or_5xx",
 				zap.String("network", network),
 				zap.String("upstream", upstreamURL),
 				zap.Int("status", resp.StatusCode),
@@ -144,6 +148,7 @@ func (p *Proxy) Serve(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// ✅ Успешный ответ
 		for k, vv := range resp.Header {
 			for _, v := range vv {
 				w.Header().Add(k, v)
@@ -163,6 +168,8 @@ func (p *Proxy) Serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Все попытки исчерпаны
+	p.Logger.Error("proxy_all_upstreams_failed", zap.String("network", network))
 	http.Error(w, "all upstreams failed", http.StatusBadGateway)
 	metrics.ProxyFail.WithLabelValues(network).Inc()
 }
