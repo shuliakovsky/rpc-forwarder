@@ -6,7 +6,7 @@ nodes:
     priority: 1
     isPrivate: false
 
-  - url: https://bitcoin.drpc.org
+  - url: bitcoin-rpc.publicnode.com
     priority: 1
     isPrivate: false
 

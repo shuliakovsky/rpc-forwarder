@@ -12,6 +12,7 @@ import (
 
 	"github.com/shuliakovsky/rpc-forwarder/pkg/networks"
 	"github.com/shuliakovsky/rpc-forwarder/pkg/registry"
+	"github.com/shuliakovsky/rpc-forwarder/pkg/secrets"
 	"go.uber.org/zap"
 	"golang.org/x/net/proxy"
 )
@@ -87,17 +88,57 @@ func (c *Checker) checkEVM(n networks.Node, timeout time.Duration) (bool, int64)
 	start := time.Now()
 	resp, err := cl.Do(req)
 	if err != nil {
+		c.Logger.Warn("evm_health_request_error",
+			safeURLField(n.URL),
+			safeHeadersField(n.Headers),
+			zap.Error(err),
+		)
 		return false, 0
 	}
 	defer resp.Body.Close()
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		c.Logger.Warn("evm_health_bad_status",
+			safeURLField(n.URL),
+			safeHeadersField(n.Headers),
+			zap.Int("status", resp.StatusCode),
+		)
+
 		return false, 0
 	}
-	var out struct{ Result string }
-	_ = json.NewDecoder(resp.Body).Decode(&out)
+
+	var out struct {
+		Result string          `json:"result"`
+		Error  json.RawMessage `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		c.Logger.Warn("evm_health_decode_error",
+			safeURLField(n.URL),
+			safeHeadersField(n.Headers),
+			zap.Error(err),
+		)
+
+		return false, 0
+	}
+
 	if out.Result == "" {
+		if len(out.Error) > 0 {
+			c.Logger.Warn("evm_health_rpc_error",
+				safeURLField(n.URL),
+				safeHeadersField(n.Headers),
+				zap.ByteString("error", out.Error),
+			)
+
+		} else {
+			c.Logger.Warn("evm_health_empty_result",
+				safeURLField(n.URL),
+				safeHeadersField(n.Headers),
+			)
+
+		}
 		return false, 0
 	}
+
 	return true, time.Since(start).Milliseconds()
 }
 
@@ -307,21 +348,33 @@ func (c *Checker) UpdateNetwork(protocol string, nodes []networks.Node) []regist
 		default:
 			alive, ping = false, 0
 		}
+		safeHeaders := secrets.RedactHeaders(n.Headers)
+
 		if !alive {
 			c.Logger.Warn("health_node_unhealthy",
-				zap.String("url", n.URL),
+				zap.String("url", secrets.RedactString(n.URL)),
 				zap.String("protocol", protocol),
 				zap.Int("priority", n.Priority),
+				zap.Any("headers", safeHeaders),
 			)
 		} else {
 			c.Logger.Debug("health_node_alive",
-				zap.String("url", n.URL),
+				zap.String("url", secrets.RedactString(n.URL)),
 				zap.String("protocol", protocol),
 				zap.Int("priority", n.Priority),
 				zap.Int64("ping_ms", ping),
+				zap.Any("headers", safeHeaders),
 			)
 		}
 		res = append(res, registry.NodeWithPing{Node: n, Alive: alive, Ping: ping})
 	}
 	return registry.PickFastestPerPriority(res)
+}
+
+func safeURLField(url string) zap.Field {
+	return zap.String("url", secrets.RedactString(url))
+}
+
+func safeHeadersField(h map[string]string) zap.Field {
+	return zap.Any("headers", secrets.RedactHeaders(h))
 }

@@ -64,3 +64,7 @@ func RedactString(s string) string {
 	}
 	return s
 }
+func ResetSensitiveEnvs() {
+	sensitiveEnvs = nil
+	once = sync.Once{}
+}

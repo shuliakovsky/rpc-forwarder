@@ -1,9 +1,12 @@
 package main
 
+import "github.com/shuliakovsky/rpc-forwarder/pkg/secrets"
+
 func main() {
 	PrintVersion()
 
 	cfg := loadConfig()
+	secrets.ResetSensitiveEnvs()
 	logger := initLogger()
 	defer logger.Sync()
 
@@ -15,6 +18,5 @@ func main() {
 	startHealthLoop(reg, checker, logger)
 
 	registerRoutes(reg, checker, peerStore, nodeID, internalAddr, cfg, logger)
-
 	startServer(cfg.Host, cfg.Port, logger)
 }
