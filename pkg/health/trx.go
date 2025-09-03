@@ -1,7 +1,6 @@
 package health
 
 import (
-	"bytes"
 	"context"
 	"net/http"
 	"strings"
@@ -17,8 +16,11 @@ func (c *Checker) checkTRX(n networks.Node, timeout time.Duration) (bool, int64)
 	defer cancel()
 
 	start := time.Now()
+	u := strings.TrimSuffix(n.URL, "/")
+
+	// === Tatum REST ===
 	if strings.Contains(n.URL, "tatum.io") {
-		req, _ := http.NewRequestWithContext(ctx, "GET", strings.TrimSuffix(n.URL, "/")+"/wallet/getnodeinfo", nil)
+		req, _ := http.NewRequestWithContext(ctx, "GET", u+"/wallet/getnodeinfo", nil)
 		for k, v := range n.Headers {
 			req.Header.Set(k, v)
 		}
@@ -38,8 +40,9 @@ func (c *Checker) checkTRX(n networks.Node, timeout time.Duration) (bool, int64)
 		}
 		return true, time.Since(start).Milliseconds()
 	}
-	payload := []byte(`{"jsonrpc":"2.0","method":"wallet/getnowblock"}`)
-	req, _ := http.NewRequestWithContext(ctx, "POST", n.URL, bytes.NewReader(payload))
+
+	// === TronGrid / обычный FullNode API ===
+	req, _ := http.NewRequestWithContext(ctx, "POST", u+"/wallet/getnowblock", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	for k, v := range n.Headers {
 		req.Header.Set(k, v)

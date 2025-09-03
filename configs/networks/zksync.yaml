@@ -3,12 +3,10 @@ protocol: evm
 timeoutMs: 1500
 nodes:
   - url: https://mainnet.era.zksync.io
-    isPrivate: false
     priority: 1
     headers:
       Content-Type: application/json
   - url: https://zksync-mainnet.gateway.tatum.io/
-    isPrivate: true
     priority: 2
     headers:
       x-api-key: ${TATUM_API_KEY}

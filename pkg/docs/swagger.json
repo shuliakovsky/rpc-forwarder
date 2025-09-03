@@ -62,7 +62,6 @@
         "properties": {
           "url": { "type": "string", "format": "uri" },
           "priority": { "type": "integer", "minimum": 1, "default": 1 },
-          "isPrivate": { "type": "boolean", "default": false },
           "headers": {
             "type": "object",
             "additionalProperties": { "type": "string" },
@@ -77,7 +76,6 @@
         "properties": {
           "url": { "type": "string", "format": "uri" },
           "priority": { "type": "integer" },
-          "isPrivate": { "type": "boolean" },
           "alive": { "type": "boolean" },
           "ping": { "type": "integer", "description": "Latency in ms" }
         }
@@ -213,8 +211,8 @@
                     "protocol": "evm",
                     "timeoutMs": 1500,
                     "nodes": [
-                      { "url": "https://ethereum.publicnode.com", "priority": 1, "isPrivate": false, "alive": true, "ping": 123 },
-                      { "url": "https://eth.llamarpc.com", "priority": 2, "isPrivate": false, "alive": true, "ping": 145 }
+                      { "url": "https://ethereum.publicnode.com", "priority": 1, "alive": true, "ping": 123 },
+                      { "url": "https://eth.llamarpc.com", "priority": 2, "alive": true, "ping": 145 }
                     ]
                   },
                   "btc": {
@@ -222,7 +220,7 @@
                     "protocol": "btc",
                     "timeoutMs": 2500,
                     "nodes": [
-                      { "url": "https://blockstream.info/api", "priority": 1, "isPrivate": false, "alive": true, "ping": 210 }
+                      { "url": "https://blockstream.info/api", "priority": 1, "alive": true, "ping": 210 }
                     ]
                   }
                 }
@@ -474,7 +472,6 @@
               "example": {
                 "url": "https://another-rpc-endpoint.example",
                 "priority": 3,
-                "isPrivate": false,
                 "headers": { "x-api-key": "abc123" }
               }
             }

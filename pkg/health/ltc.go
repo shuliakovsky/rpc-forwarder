@@ -17,8 +17,12 @@ func (c *Checker) checkLTC(n networks.Node, timeout time.Duration) (bool, int64)
 
 	start := time.Now()
 	u := strings.TrimSuffix(n.URL, "/")
+
+	// === Tatum JSON-RPC ===
 	if strings.Contains(n.URL, "tatum.io") {
-		req, _ := http.NewRequestWithContext(ctx, "GET", u+"/v3/litecoin/address/balance/test", nil)
+		body := `{"jsonrpc":"2.0","method":"getblockcount","params":[],"id":1}`
+		req, _ := http.NewRequestWithContext(ctx, "POST", u, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		for k, v := range n.Headers {
 			req.Header.Set(k, v)
 		}
@@ -36,10 +40,11 @@ func (c *Checker) checkLTC(n networks.Node, timeout time.Duration) (bool, int64)
 			}
 			return false, 0
 		}
-
 		return true, time.Since(start).Milliseconds()
 	}
-	req, _ := http.NewRequestWithContext(ctx, "GET", u+"/block/tip/height", nil)
+
+	// === Litecoin Core REST ===
+	req, _ := http.NewRequestWithContext(ctx, "GET", u+"/rest/chaininfo.json", nil)
 	resp, err := cl.Do(req)
 	if err != nil {
 		if isFatalNetErr(err) {

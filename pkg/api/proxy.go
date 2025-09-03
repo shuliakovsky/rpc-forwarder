@@ -63,7 +63,8 @@ func (p *Proxy) Serve(w http.ResponseWriter, r *http.Request) {
 
 	// 🔧 Адаптация запроса
 	protocol := p.Reg.ProtocolOf(network)
-	ad := adapters.Adapt(network, protocol, tail, r.Method, r.Header, origBody, p.Logger)
+	baseURL := candidates[0].URL
+	ad := adapters.Adapt(network, protocol, baseURL, tail, r.Method, r.Header, origBody, p.Logger)
 
 	// Уважение метода: если адаптер переписал GET → POST с телом, убираем query
 	rawQuery := r.URL.RawQuery

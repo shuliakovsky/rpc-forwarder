@@ -1,19 +1,18 @@
 package adapters
 
 import (
+	"go.uber.org/zap"
 	"net/http"
 	"strings"
-
-	"go.uber.org/zap"
 )
 
-func adaptDOGE(tail, method string, _ http.Header, body []byte, logger *zap.Logger, baseURL string) Result {
+func adaptLTC(tail, method string, _ http.Header, body []byte, logger *zap.Logger, baseURL string) Result {
 	ltail := strings.ToLower(strings.TrimPrefix(tail, "/"))
 	lbase := strings.ToLower(baseURL)
 
 	// 1) Tatum JSON-RPC
 	if strings.Contains(lbase, "tatum.io") {
-		logger.Debug("doge_adapter_tatum")
+		logger.Debug("ltc_adapter_tatum")
 		return Result{
 			Tail:    "",
 			Method:  http.MethodPost,
@@ -22,7 +21,7 @@ func adaptDOGE(tail, method string, _ http.Header, body []byte, logger *zap.Logg
 		}
 	}
 
-	// 2) Прямые REST/API вызовы
+	// 2) Прямые REST/API вызовы — прокидываем как есть
 	if strings.HasPrefix(ltail, "rest/") || strings.HasPrefix(ltail, "api/") {
 		return Result{
 			Tail:    tail,
@@ -34,14 +33,32 @@ func adaptDOGE(tail, method string, _ http.Header, body []byte, logger *zap.Logg
 
 	// 3) Нет хвоста — дефолт под тип апстрима
 	if ltail == "" {
-		logger.Debug("doge_adapter_default_height")
+		logger.Debug("ltc_adapter_default_height")
 		switch {
-		case strings.Contains(lbase, "dogechain.info"):
-			return Result{Tail: "api/v1/block/count", Method: http.MethodGet, Body: nil, Headers: map[string]string{}}
-		case strings.Contains(lbase, "socha.in"):
-			return Result{Tail: "api/v2", Method: http.MethodGet, Body: nil, Headers: map[string]string{}}
+		case strings.Contains(lbase, "sochain.com"):
+			// SoChain API
+			return Result{
+				Tail:    "api/v2/get_info/LTC",
+				Method:  http.MethodGet,
+				Body:    nil,
+				Headers: map[string]string{},
+			}
+		case strings.Contains(lbase, "blockbook") || strings.Contains(lbase, "blockchair"):
+			// Blockbook API
+			return Result{
+				Tail:    "api/v2",
+				Method:  http.MethodGet,
+				Body:    nil,
+				Headers: map[string]string{},
+			}
 		default:
-			return Result{Tail: "rest/chaininfo.json", Method: http.MethodGet, Body: nil, Headers: map[string]string{}}
+			// Litecoin Core REST
+			return Result{
+				Tail:    "rest/chaininfo.json",
+				Method:  http.MethodGet,
+				Body:    nil,
+				Headers: map[string]string{},
+			}
 		}
 	}
 

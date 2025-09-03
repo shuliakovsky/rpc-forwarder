@@ -17,8 +17,12 @@ func (c *Checker) checkDOGE(n networks.Node, timeout time.Duration) (bool, int64
 
 	start := time.Now()
 	u := strings.TrimSuffix(n.URL, "/")
+
+	// === Tatum JSON-RPC ===
 	if strings.Contains(n.URL, "tatum.io") {
-		req, _ := http.NewRequestWithContext(ctx, "GET", u+"/v3/dogecoin/address/balance/test", nil)
+		body := `{"jsonrpc":"2.0","method":"getblockcount","params":[],"id":1}`
+		req, _ := http.NewRequestWithContext(ctx, "POST", u, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		for k, v := range n.Headers {
 			req.Header.Set(k, v)
 		}
@@ -36,10 +40,11 @@ func (c *Checker) checkDOGE(n networks.Node, timeout time.Duration) (bool, int64
 			}
 			return false, 0
 		}
-
 		return true, time.Since(start).Milliseconds()
 	}
-	req, _ := http.NewRequestWithContext(ctx, "GET", u+"/api/v1/block/count", nil)
+
+	// === Dogecoin Core REST ===
+	req, _ := http.NewRequestWithContext(ctx, "GET", u+"/rest/chaininfo.json", nil)
 	resp, err := cl.Do(req)
 	if err != nil {
 		if isFatalNetErr(err) {

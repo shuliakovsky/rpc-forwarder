@@ -63,9 +63,8 @@ func registerRoutes(
 			return
 		}
 		type liteNode struct {
-			URL       string `json:"url"`
-			Priority  int    `json:"priority"`
-			IsPrivate bool   `json:"isPrivate"`
+			URL      string `json:"url"`
+			Priority int    `json:"priority"`
 		}
 		out := make(map[string][]liteNode)
 		for name, st := range reg.All() {
@@ -79,9 +78,8 @@ func registerRoutes(
 				masked := n.URL
 				masked = secrets.RedactString(masked)
 				arr = append(arr, liteNode{
-					URL:       masked,
-					Priority:  n.Priority,
-					IsPrivate: n.IsPrivate,
+					URL:      masked,
+					Priority: n.Priority,
 				})
 			}
 			out[name] = arr

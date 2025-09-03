@@ -3,31 +3,22 @@ protocol: evm
 timeoutMs: 1500
 nodes:
   - url: https://polygon-rpc.com
-    isPrivate: false
     priority: 1
   - url: https://rpc-mainnet.matic.quiknode.pro
-    isPrivate: false
     priority: 1
   - url: https://polygon.api.onfinality.io/public
-    isPrivate: false
     priority: 1
   - url: https://polygon-rpc.com
-    isPrivate: false
     priority: 1
   - url: https://polygon-bor-rpc.publicnode.com
-    isPrivate: false
     priority: 1
   - url: https://polygon.drpc.org
-    isPrivate: false
     priority: 1
   - url: https://polygon-pokt.nodies.app
-    isPrivate: false
     priority: 1
   - url: https://api.zan.top/polygon-mainnet
-    isPrivate: false
     priority: 1
   - url: https://polygon.gateway.tenderly.co
-    isPrivate: false
     priority: 1
 
   - url: https://polygon-mainnet.gateway.tatum.io
@@ -36,7 +27,6 @@ nodes:
       x-api-key: ${TATUM_API_KEY}
   
   - url: https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}
-    isPrivate: true
     priority: 3
     headers:
       Content-Type: application/json

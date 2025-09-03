@@ -90,9 +90,8 @@ func (p *Public) ActiveNodes(w http.ResponseWriter, r *http.Request) {
 	start := LogRequest(p.Logger, "public_active_nodes", r.Method, r.URL.Path, nil)
 	if r.Method == http.MethodPost {
 		type liteNode struct {
-			URL       string `json:"url"`
-			Priority  int    `json:"priority"`
-			IsPrivate bool   `json:"isPrivate"`
+			URL      string `json:"url"`
+			Priority int    `json:"priority"`
 		}
 		out := make(map[string][]liteNode)
 		for name, st := range p.Reg.All() {
@@ -103,9 +102,8 @@ func (p *Public) ActiveNodes(w http.ResponseWriter, r *http.Request) {
 			arr := make([]liteNode, 0, len(st.Best))
 			for _, n := range st.Best {
 				arr = append(arr, liteNode{
-					URL:       secrets.RedactString(n.URL),
-					Priority:  n.Priority,
-					IsPrivate: n.IsPrivate,
+					URL:      secrets.RedactString(n.URL),
+					Priority: n.Priority,
 				})
 			}
 			out[name] = arr
@@ -123,11 +121,10 @@ func (p *Public) ActiveNodes(w http.ResponseWriter, r *http.Request) {
 		var arr []map[string]any
 		for _, n := range st.Best {
 			arr = append(arr, map[string]any{
-				"url":       secrets.RedactString(n.URL),
-				"priority":  n.Priority,
-				"isPrivate": n.IsPrivate,
-				"alive":     n.Alive,
-				"ping":      n.Ping,
+				"url":      secrets.RedactString(n.URL),
+				"priority": n.Priority,
+				"alive":    n.Alive,
+				"ping":     n.Ping,
 			})
 		}
 		resp[name] = arr

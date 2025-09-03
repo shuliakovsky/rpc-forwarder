@@ -11,14 +11,14 @@ import (
 )
 
 type Result struct {
-	Tail              string            // tail after  /{network}
+	Tail              string            // tail after /{network}
 	Method            string            // final HTTP-method
 	Body              []byte            // final body
 	Headers           map[string]string // headers-overrides
 	AllowedHostSubstr []string          // If specified, the proxy forwards requests only to upstreams whose URLs contain at least one of the defined substrings.
 }
 
-func Adapt(network, protocol, tail, method string, hdr http.Header, body []byte, logger *zap.Logger) Result {
+func Adapt(network, protocol, baseURL, tail, method string, hdr http.Header, body []byte, logger *zap.Logger) Result {
 	switch strings.ToLower(network) {
 	case "trx":
 		return adaptTRX(tail, method, hdr, body, logger)
@@ -29,7 +29,9 @@ func Adapt(network, protocol, tail, method string, hdr http.Header, body []byte,
 	case "sol":
 		return adaptSOL(tail, method, hdr, body, logger)
 	case "doge":
-		return adaptDOGE(tail, method, hdr, body, logger)
+		return adaptDOGE(tail, method, hdr, body, logger, baseURL)
+	case "ltc":
+		return adaptLTC(tail, method, hdr, body, logger, baseURL)
 	default:
 		// default behaviour
 		if strings.EqualFold(protocol, "evm") {

@@ -2,11 +2,6 @@ route: /doge
 protocol: doge
 timeoutMs: 2500
 nodes:
-  - url: https://dogechain.info/api/v1
-    priority: 1
-  - url: https://doge.socha.in/api/v2/DOGE
-    priority: 2
-    isPrivate: false
   - url: https://dogecoin-mainnet.gateway.tatum.io
     priority: 3
     headers:

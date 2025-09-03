@@ -4,13 +4,8 @@ timeoutMs: 1500
 nodes:
   - url: https://arb1.arbitrum.io/rpc
     priority: 1
-  - url: https://arbitrum-mainnet.gateway.tatum.io
-    priority: 2
-    headers:
-      x-api-key: ${TATUM_API_KEY}
   - url: https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}
     priority: 3
-    isPrivate: true
     headers:
       Content-Type: application/json
 

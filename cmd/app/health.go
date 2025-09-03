@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/shuliakovsky/rpc-forwarder/pkg/secrets"
 	"strings"
 	"sync"
 	"time"
@@ -56,6 +57,7 @@ func startHealthLoop(reg *registry.Registry, checker *health.Checker, logger *za
 			limits := map[string]*limiter{
 				"tatum.io":      newLimiter(1),
 				"alchemyapi.io": newLimiter(1),
+				"alchemy.com":   newLimiter(1),
 			}
 			defaultLimiter := newLimiter(5)
 
@@ -83,7 +85,8 @@ func startHealthLoop(reg *registry.Registry, checker *health.Checker, logger *za
 			// drop nodes marked as fatal during checks
 			for _, url := range checker.DrainDropURLs() {
 				reg.RemoveNodeEverywhere(url)
-				logger.Warn("health_node_dropped", zap.String("url", url))
+				logger.Warn("unhealthy_node_dropped", zap.String("url", secrets.RedactString(url)))
+
 			}
 		}
 	}()
