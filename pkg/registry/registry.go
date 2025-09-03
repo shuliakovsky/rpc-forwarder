@@ -169,3 +169,41 @@ func (r *Registry) TimeoutMs(network string) int {
 	}
 	return 0
 }
+
+// RemoveNodeEverywhere removes a node URL from All/Best/Discovered across all networks.
+func (r *Registry) RemoveNodeEverywhere(url string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, st := range r.State {
+		// All
+		if len(st.All) > 0 {
+			dst := st.All[:0]
+			for _, n := range st.All {
+				if n.URL != url {
+					dst = append(dst, n)
+				}
+			}
+			st.All = dst
+		}
+		// Best
+		if len(st.Best) > 0 {
+			dst := st.Best[:0]
+			for _, n := range st.Best {
+				if n.URL != url {
+					dst = append(dst, n)
+				}
+			}
+			st.Best = dst
+		}
+		// Discovered
+		if len(st.Discovered) > 0 {
+			dst := st.Discovered[:0]
+			for _, dn := range st.Discovered {
+				if dn.Node.URL != url {
+					dst = append(dst, dn)
+				}
+			}
+			st.Discovered = dst
+		}
+	}
+}

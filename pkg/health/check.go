@@ -1,13 +1,13 @@
 package health
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"io"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/shuliakovsky/rpc-forwarder/pkg/networks"
@@ -21,13 +21,20 @@ type Checker struct {
 	TorSocks5 string
 	Logger    *zap.Logger
 	Reg       *registry.Registry
+	dropMu    sync.Mutex
+	dropURLs  map[string]struct{}
 }
 
 func New(tor string, logger *zap.Logger, reg *registry.Registry) *Checker {
 	if tor == "" {
 		tor = "127.0.0.1:9050"
 	}
-	return &Checker{TorSocks5: tor, Logger: logger, Reg: reg}
+	return &Checker{
+		TorSocks5: tor,
+		Logger:    logger,
+		Reg:       reg,
+		dropURLs:  map[string]struct{}{},
+	}
 }
 
 func (c *Checker) httpClient(tor bool, timeout time.Duration) (*http.Client, error) {
@@ -69,258 +76,6 @@ func defaultTimeoutFor(network string) time.Duration {
 	default:
 		return 1500 * time.Millisecond
 	}
-}
-
-// === EVM ===
-func (c *Checker) checkEVM(n networks.Node, timeout time.Duration) (bool, int64) {
-	cl, _ := c.httpClient(n.Tor, timeout)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	body := map[string]any{"jsonrpc": "2.0", "method": "eth_blockNumber", "id": 1}
-	js, _ := json.Marshal(body)
-	req, _ := http.NewRequestWithContext(ctx, "POST", n.URL, bytes.NewReader(js))
-	for k, v := range n.Headers {
-		req.Header.Set(k, v)
-	}
-	req.Header.Set("content-type", "application/json")
-
-	start := time.Now()
-	resp, err := cl.Do(req)
-	if err != nil {
-		c.Logger.Warn("evm_health_request_error",
-			safeURLField(n.URL),
-			safeHeadersField(n.Headers),
-			zap.Error(err),
-		)
-		return false, 0
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		c.Logger.Warn("evm_health_bad_status",
-			safeURLField(n.URL),
-			safeHeadersField(n.Headers),
-			zap.Int("status", resp.StatusCode),
-		)
-
-		return false, 0
-	}
-
-	var out struct {
-		Result string          `json:"result"`
-		Error  json.RawMessage `json:"error"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		c.Logger.Warn("evm_health_decode_error",
-			safeURLField(n.URL),
-			safeHeadersField(n.Headers),
-			zap.Error(err),
-		)
-
-		return false, 0
-	}
-
-	if out.Result == "" {
-		if len(out.Error) > 0 {
-			c.Logger.Warn("evm_health_rpc_error",
-				safeURLField(n.URL),
-				safeHeadersField(n.Headers),
-				zap.ByteString("error", out.Error),
-			)
-
-		} else {
-			c.Logger.Warn("evm_health_empty_result",
-				safeURLField(n.URL),
-				safeHeadersField(n.Headers),
-			)
-
-		}
-		return false, 0
-	}
-
-	return true, time.Since(start).Milliseconds()
-}
-
-// === BTC ===
-func (c *Checker) checkBTC(n networks.Node, timeout time.Duration) (bool, int64) {
-	cl, _ := c.httpClient(n.Tor, timeout)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	start := time.Now()
-	u := strings.TrimSuffix(n.URL, "/")
-
-	// Blockstream REST
-	if strings.Contains(u, "blockstream.info") || strings.HasSuffix(u, "/api") {
-		req, _ := http.NewRequestWithContext(ctx, "GET", u+"/blocks/tip/height", nil)
-		resp, err := cl.Do(req)
-		if err != nil {
-			return false, 0
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode/100 != 2 {
-			return false, 0
-		}
-		io.Copy(io.Discard, resp.Body)
-		return true, time.Since(start).Milliseconds()
-	}
-
-	// Tatum gateway JSON-RPC
-	if strings.Contains(u, "gateway.tatum.io") {
-		payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"getblockcount","params":[]}`)
-		req, _ := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(payload))
-		for k, v := range n.Headers {
-			req.Header.Set(k, v)
-		}
-		req.Header.Set("content-type", "application/json")
-		resp, err := cl.Do(req)
-		if err != nil {
-			return false, 0
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return false, 0
-		}
-		io.Copy(io.Discard, resp.Body)
-		return true, time.Since(start).Milliseconds()
-	}
-
-	return false, 0
-}
-
-// === TRX ===
-func (c *Checker) checkTRX(n networks.Node, timeout time.Duration) (bool, int64) {
-	cl, _ := c.httpClient(n.Tor, timeout)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	start := time.Now()
-	if strings.Contains(n.URL, "tatum.io") {
-		req, _ := http.NewRequestWithContext(ctx, "GET", strings.TrimSuffix(n.URL, "/")+"/wallet/getnodeinfo", nil)
-		for k, v := range n.Headers {
-			req.Header.Set(k, v)
-		}
-		resp, err := cl.Do(req)
-		if err != nil {
-			return false, 0
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return false, 0
-		}
-		return true, time.Since(start).Milliseconds()
-	}
-	payload := []byte(`{"jsonrpc":"2.0","method":"wallet/getnowblock"}`)
-	req, _ := http.NewRequestWithContext(ctx, "POST", n.URL, bytes.NewReader(payload))
-	req.Header.Set("Content-Type", "application/json")
-	for k, v := range n.Headers {
-		req.Header.Set(k, v)
-	}
-	resp, err := cl.Do(req)
-	if err != nil {
-		return false, 0
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return false, 0
-	}
-	return true, time.Since(start).Milliseconds()
-}
-
-// === LTC ===
-func (c *Checker) checkLTC(n networks.Node, timeout time.Duration) (bool, int64) {
-	cl, _ := c.httpClient(n.Tor, timeout)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	start := time.Now()
-	u := strings.TrimSuffix(n.URL, "/")
-	if strings.Contains(n.URL, "tatum.io") {
-		req, _ := http.NewRequestWithContext(ctx, "GET", u+"/v3/litecoin/address/balance/test", nil)
-		for k, v := range n.Headers {
-			req.Header.Set(k, v)
-		}
-		resp, err := cl.Do(req)
-		if err != nil {
-			return false, 0
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return false, 0
-		}
-		return true, time.Since(start).Milliseconds()
-	}
-	req, _ := http.NewRequestWithContext(ctx, "GET", u+"/block/tip/height", nil)
-	resp, err := cl.Do(req)
-	if err != nil {
-		return false, 0
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return false, 0
-	}
-	return true, time.Since(start).Milliseconds()
-}
-
-// === DOGE ===
-func (c *Checker) checkDOGE(n networks.Node, timeout time.Duration) (bool, int64) {
-	cl, _ := c.httpClient(n.Tor, timeout)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	start := time.Now()
-	u := strings.TrimSuffix(n.URL, "/")
-	if strings.Contains(n.URL, "tatum.io") {
-		req, _ := http.NewRequestWithContext(ctx, "GET", u+"/v3/dogecoin/address/balance/test", nil)
-		for k, v := range n.Headers {
-			req.Header.Set(k, v)
-		}
-		resp, err := cl.Do(req)
-		if err != nil {
-			return false, 0
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return false, 0
-		}
-		return true, time.Since(start).Milliseconds()
-	}
-	req, _ := http.NewRequestWithContext(ctx, "GET", u+"/api/v1/block/count", nil)
-	resp, err := cl.Do(req)
-	if err != nil {
-		return false, 0
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return false, 0
-	}
-	return true, time.Since(start).Milliseconds()
-}
-
-// === SOL ===
-func (c *Checker) checkSOL(n networks.Node, timeout time.Duration) (bool, int64) {
-	cl, _ := c.httpClient(n.Tor, timeout)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	start := time.Now()
-	body := map[string]any{"jsonrpc": "2.0", "method": "getSlot", "id": 1}
-	js, _ := json.Marshal(body)
-	req, _ := http.NewRequestWithContext(ctx, "POST", n.URL, bytes.NewReader(js))
-	for k, v := range n.Headers {
-		req.Header.Set(k, v)
-	}
-	req.Header.Set("content-type", "application/json")
-	resp, err := cl.Do(req)
-	if err != nil {
-		return false, 0
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return false, 0
-	}
-	return true, time.Since(start).Milliseconds()
 }
 
 // === UpdateNetwork ===
@@ -377,4 +132,60 @@ func safeURLField(url string) zap.Field {
 
 func safeHeadersField(h map[string]string) zap.Field {
 	return zap.Any("headers", secrets.RedactHeaders(h))
+}
+
+// treat 4xx (except 429) as fatal
+func isFatalHTTPStatus(code int) bool {
+	if code == 0 {
+		return false
+	}
+	return code >= 400 && code < 500 && code != 429
+}
+
+// classify network-level errors considered fatal
+func isFatalNetErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	// DNS errors
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return true
+	}
+	// connection refused
+	var opErr *net.OpError
+	if errors.As(err, &opErr) && opErr.Err != nil && errors.Is(opErr.Err, syscall.ECONNREFUSED) {
+		return true
+	}
+	// unsupported protocol / bad URL
+	if strings.Contains(err.Error(), "unsupported protocol scheme") {
+		return true
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "no such host") {
+		return true
+	}
+	// TLS/x509 issues
+	if strings.Contains(strings.ToLower(err.Error()), "x509:") ||
+		strings.Contains(strings.ToLower(err.Error()), "tls") {
+		return true
+	}
+	return false
+}
+
+func (c *Checker) markDrop(url string) {
+	c.dropMu.Lock()
+	c.dropURLs[url] = struct{}{}
+	c.dropMu.Unlock()
+}
+
+// DrainDropURLs returns and clears accumulated URLs to drop.
+func (c *Checker) DrainDropURLs() []string {
+	c.dropMu.Lock()
+	defer c.dropMu.Unlock()
+	out := make([]string, 0, len(c.dropURLs))
+	for u := range c.dropURLs {
+		out = append(out, u)
+	}
+	c.dropURLs = map[string]struct{}{}
+	return out
 }

@@ -79,6 +79,12 @@ func startHealthLoop(reg *registry.Registry, checker *health.Checker, logger *za
 				}(name, st)
 			}
 			wg.Wait()
+
+			// drop nodes marked as fatal during checks
+			for _, url := range checker.DrainDropURLs() {
+				reg.RemoveNodeEverywhere(url)
+				logger.Warn("health_node_dropped", zap.String("url", url))
+			}
 		}
 	}()
 }
