@@ -4,11 +4,19 @@ timeoutMs: 2500
 nodes:
   - url: https://blockstream.info/api
     priority: 1
+    isPrivate: false
+
+  - url: https://bitcoin.drpc.org
+    priority: 1
+    isPrivate: false
+
   - url: https://bitcoin-mainnet.gateway.tatum.io
     priority: 2
     headers:
       x-api-key: ${TATUM_API_KEY}
-# +# if an onion node is available:
-#  - url: http://btcnodeexample.onion
-#    priority: 1
-#    tor: true
+    isPrivate: true
+
+  # +# if an onion node is available:
+  #  - url: http://btcnodeexample.onion
+  #    priority: 1
+  #    tor: true

@@ -33,7 +33,7 @@ func registerRoutes(
 	logger *zap.Logger,
 ) {
 	public := api.NewPublic(reg, logger)
-	proxy := api.NewProxy(reg, logger)
+	proxy := api.NewProxy(reg, logger, cfg.TorSocks)
 	adminAPI := api.NewAdmin(reg, checker, cfg.AdminKey, logger)
 	wsAPI := api.NewWS(reg, logger)
 
@@ -91,9 +91,9 @@ func registerRoutes(
 	})
 
 	// Fee helpers
-	http.HandleFunc("/proxy/btc/fees", public.BTCFees)
 	http.HandleFunc("/proxy/eth/fee", public.EthFee)
 	http.HandleFunc("/proxy/eth/maxPriorityFee", public.EthMaxPriorityFee)
+	http.HandleFunc("/proxy/btc/fees", public.BTCFees)
 	http.HandleFunc("/proxy/btc/balance/", public.BTCBalance)
 
 	// NFT helpers

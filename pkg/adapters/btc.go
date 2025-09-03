@@ -13,17 +13,18 @@ import (
 func adaptBTC(tail, method string, _ http.Header, body []byte, logger *zap.Logger) Result {
 	ltail := strings.ToLower(strings.TrimPrefix(tail, "/"))
 
-	// 1) REST-paths — as is
+	// Пустой хвост → Blockstream, но с fallback на Tatum
 	if ltail == "" || ltail == "/" {
-		logger.Debug("btc_adapter_default_tip_height")
+		logger.Debug("btc_adapter_tip_height_with_fallback")
 		return Result{
 			Tail:              "blocks/tip/height",
 			Method:            http.MethodGet,
 			Body:              nil,
 			Headers:           map[string]string{},
-			AllowedHostSubstr: []string{"blockstream.info"}, // ограничиваем на надёжного провайдера
+			AllowedHostSubstr: []string{"blockstream.info", "tatum.io"},
 		}
 	}
+
 	if strings.HasPrefix(ltail, "rest/") ||
 		strings.HasPrefix(ltail, "blocks/") ||
 		strings.HasPrefix(ltail, "tx/") ||
@@ -33,12 +34,11 @@ func adaptBTC(tail, method string, _ http.Header, body []byte, logger *zap.Logge
 			Method:            method,
 			Body:              clone(body),
 			Headers:           map[string]string{},
-			AllowedHostSubstr: nil,
+			AllowedHostSubstr: []string{"blockstream.info", "tatum.io"},
 		}
 	}
 
-	// 2) extension: BTC fees  → Tatum
-	// GET /btc/fees → https://api.tatum.io/v3/blockchain/fee/BTC
+	// fees → Tatum
 	if ltail == "fees" {
 		logger.Debug("btc_adapter_fees_tatum_only")
 		return Result{
@@ -50,8 +50,7 @@ func adaptBTC(tail, method string, _ http.Header, body []byte, logger *zap.Logge
 		}
 	}
 
-	// 3) extension: balance of the address BTC → Tatum
-	// GET /btc/balance/{address} → https://api.tatum.io/v3/bitcoin/address/balance/{address}
+	// balance → Tatum
 	if strings.HasPrefix(ltail, "balance/") {
 		addr := strings.TrimPrefix(ltail, "balance/")
 		if addr != "" {
@@ -66,7 +65,6 @@ func adaptBTC(tail, method string, _ http.Header, body []byte, logger *zap.Logge
 		}
 	}
 
-	// 4) Default behaviour
 	return Result{
 		Tail:              tail,
 		Method:            method,

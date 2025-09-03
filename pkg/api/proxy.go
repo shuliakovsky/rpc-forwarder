@@ -3,7 +3,9 @@ package api
 import (
 	"bytes"
 	"context"
+	"golang.org/x/net/proxy"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -16,16 +18,18 @@ import (
 )
 
 type Proxy struct {
-	Reg    *registry.Registry
-	Logger *zap.Logger
-	Client *http.Client
+	Reg      *registry.Registry
+	Logger   *zap.Logger
+	Client   *http.Client
+	TorSocks string
 }
 
-func NewProxy(reg *registry.Registry, logger *zap.Logger) *Proxy {
+func NewProxy(reg *registry.Registry, logger *zap.Logger, torSocks string) *Proxy {
 	return &Proxy{
-		Reg:    reg,
-		Logger: logger,
-		Client: &http.Client{Timeout: 8 * time.Second},
+		Reg:      reg,
+		Logger:   logger,
+		Client:   &http.Client{Timeout: 8 * time.Second},
+		TorSocks: torSocks,
 	}
 }
 
@@ -115,7 +119,8 @@ func (p *Proxy) Serve(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Отправка запроса
-		resp, err := p.Client.Do(req)
+		client := p.clientFor(node, perNodeTimeout)
+		resp, err := client.Do(req)
 		if err != nil {
 			cancel()
 			p.Logger.Warn("proxy_upstream_error",
@@ -172,6 +177,25 @@ func (p *Proxy) Serve(w http.ResponseWriter, r *http.Request) {
 	p.Logger.Error("proxy_all_upstreams_failed", zap.String("network", network))
 	http.Error(w, "all upstreams failed", http.StatusBadGateway)
 	metrics.ProxyFail.WithLabelValues(network).Inc()
+}
+
+func (p *Proxy) clientFor(node registry.NodeWithPing, timeout time.Duration) *http.Client {
+	tr := &http.Transport{
+		MaxIdleConns:        100,
+		IdleConnTimeout:     60 * time.Second,
+		TLSHandshakeTimeout: 8 * time.Second,
+	}
+	if node.Tor {
+		dialer, err := proxy.SOCKS5("tcp", p.TorSocks, nil, proxy.Direct)
+		if err == nil {
+			tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return dialer.Dial(network, addr)
+			}
+		} else {
+			p.Logger.Warn("tor_socks5_dialer_error", zap.Error(err))
+		}
+	}
+	return &http.Client{Transport: tr, Timeout: timeout}
 }
 
 func buildUpstreamURL(base, tail, rawQuery string) string {
